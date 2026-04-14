@@ -17,7 +17,6 @@ typedef struct Contact {
 
 Contact contact_array[MAX_CONTACTS];
 
-// Function signatures
 void trim_newline(char *str);
 int add_new_entry();
 int read_from_csv(Contact contact_array[]);
@@ -71,7 +70,7 @@ void trim_newline(char *str) {
 int add_new_entry() {
   FILE *fptr;
 
-  fptr = fopen(FILENAME, "a"); // 'a' means open in append mode
+  fptr = fopen(FILENAME, "a");
   if (fptr == NULL) {
     printf("Could not open %s for writing\n", FILENAME);
     return 1;
@@ -99,57 +98,53 @@ int add_new_entry() {
   trim_newline(number);
 
   fprintf(fptr, "%s,%s,%s,%s\n", name, address, email, number);
-  fclose(fptr); // close file when done
+  fclose(fptr);
 
   printf("\nSaved contact!\n\n");
 
-  return 0; // 0 = success
+  return 0;
 }
 
 int read_from_csv(Contact contact_array[]) {
   FILE *fptr;
-  char buffer[(INPUT_LENGTH * 4 + 5)]; // calc the max size of a line
+  char buffer[(INPUT_LENGTH * 4 + 5)];
   int i = 0;
 
-  fptr = fopen(FILENAME, "r"); // open file in read mode
+  fptr = fopen(FILENAME, "r");
   if (fptr == NULL) {
-    return 0; // Return 0 contacts if file doesn't exist
+    return 0;
   }
 
   while (fgets(buffer, sizeof(buffer), fptr)) {
     char *p = buffer;
-    // Skip empty lines or whitespace-only lines
     while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')
       p++;
     if (*p == '\0')
       continue;
 
-    char *new_line_pointer = strchr(buffer, '\n'); // remove the new line char
+    char *new_line_pointer = strchr(buffer, '\n');
     if (new_line_pointer)
       *new_line_pointer = '\0';
 
     char *field = strtok(buffer, ",");
-    int x = 0; // also using this as an iterator to know where to place the data
-               // in the array
+    int x = 0;
 
     while (field != NULL) {
-      if (x == 0) { // if name
+      if (x == 0) {
         strncpy(contact_array[i].name, field, INPUT_LENGTH - 1);
         contact_array[i].name[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 1) { // if address
+      } else if (x == 1) {
         strncpy(contact_array[i].address, field, INPUT_LENGTH - 1);
         contact_array[i].address[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 2) { // if email
+      } else if (x == 2) {
         strncpy(contact_array[i].email, field, INPUT_LENGTH - 1);
         contact_array[i].email[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 3) { // if number
+      } else if (x == 3) {
         strncpy(contact_array[i].number, field, INPUT_LENGTH - 1);
         contact_array[i].number[INPUT_LENGTH - 1] = '\0';
       }
       x++;
-      field = strtok(
-          NULL,
-          ","); // NULL tells it to continue where it left off on last string
+      field = strtok(NULL, ",");
     }
 
     i++;
@@ -159,7 +154,7 @@ int read_from_csv(Contact contact_array[]) {
 
   fclose(fptr);
 
-  return i; // number of contacts loaded
+  return i;
 }
 
 void print_contact(const Contact *contact) {
@@ -179,9 +174,9 @@ int list_contacts() {
   }
 
   printf("\n--- Contact List ---\n");
-  for (int i = 0; i < contact_count; i++) { // once per contact
-    print_contact(&contact_array[i]);       // & means the memory location of
-  } // so its a pointer to that element of the array
+  for (int i = 0; i < contact_count; i++) {
+    print_contact(&contact_array[i]);
+  }
 
-  return 0; // 0 = success
+  return 0;
 }
