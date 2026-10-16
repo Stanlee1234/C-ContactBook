@@ -5,6 +5,8 @@
 
 #define INPUT_LENGTH 100
 #define MAX_CONTACTS 100
+/* Four quoted fields, doubled quotes, delimiters, CRLF and NUL. */
+#define CSV_LINE_LENGTH (INPUT_LENGTH * 8 + 16)
 
 char *FILENAME = "contact_book_data.csv";
 
@@ -82,22 +84,46 @@ int add_new_entry() {
   char number[INPUT_LENGTH];
 
   printf("Enter Name: ");
-  fgets(name, INPUT_LENGTH, stdin);
+  if (fgets(name, INPUT_LENGTH, stdin) == NULL) {
+    fclose(fptr);
+    return 1;
+  }
   trim_newline(name);
 
   printf("Enter Address: ");
-  fgets(address, INPUT_LENGTH, stdin);
+  if (fgets(address, INPUT_LENGTH, stdin) == NULL) {
+    fclose(fptr);
+    return 1;
+  }
   trim_newline(address);
 
   printf("Enter Email: ");
-  fgets(email, INPUT_LENGTH, stdin);
+  if (fgets(email, INPUT_LENGTH, stdin) == NULL) {
+    fclose(fptr);
+    return 1;
+  }
   trim_newline(email);
 
   printf("Enter Number: ");
-  fgets(number, INPUT_LENGTH, stdin);
+  if (fgets(number, INPUT_LENGTH, stdin) == NULL) {
+    fclose(fptr);
+    return 1;
+  }
   trim_newline(number);
 
-  fprintf(fptr, "%s,%s,%s,%s\n", name, address, email, number);
+  const char *fields[] = {name, address, email, number};
+  for (int i = 0; i < 4; i++) {
+    if (i > 0)
+      fputc(',', fptr);
+    fputc('"', fptr);
+    for (const char *c = fields[i]; *c; c++) {
+      if (*c == '"')
+        fputc('"', fptr);
+      fputc(*c, fptr);
+    }
+    fputc('"', fptr);
+  }
+  fputc('\n', fptr);
   fclose(fptr);
 
   printf("\nSaved contact!\n\n");
@@ -105,56 +131,75 @@ int add_new_entry() {
   return 0;
 }
 
-int read_from_csv(Contact contact_array[]) {
-  FILE *fptr;
-  char buffer[(INPUT_LENGTH * 4 + 5)];
-  int i = 0;
-
-  fptr = fopen(FILENAME, "r");
-  if (fptr == NULL) {
-    return 0;
-  }
-
-  while (fgets(buffer, sizeof(buffer), fptr)) {
-    char *p = buffer;
-    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')
+/* Contacts are one physical line: the input prompts do not accept newlines.
+ * Accept quoted or legacy unquoted fields; reject malformed/oversized rows
+ * rather than silently shifting or truncating a contact.
+ */
+static int parse_contact_csv(const char *line, Contact *contact) {
+  Contact parsed = {0};
+  char *fields[] = {parsed.name, parsed.address, parsed.email, parsed.number};
+  const char *p = line;
+  for (int field = 0; field < 4; field++) {
+    size_t length = 0;
+    int quoted = (*p == '"');
+    if (quoted)
       p++;
-    if (*p == '\0')
-      continue;
-
-    char *new_line_pointer = strchr(buffer, '\n');
-    if (new_line_pointer)
-      *new_line_pointer = '\0';
-
-    char *field = strtok(buffer, ",");
-    int x = 0;
-
-    while (field != NULL) {
-      if (x == 0) {
-        strncpy(contact_array[i].name, field, INPUT_LENGTH - 1);
-        contact_array[i].name[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 1) {
-        strncpy(contact_array[i].address, field, INPUT_LENGTH - 1);
-        contact_array[i].address[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 2) {
-        strncpy(contact_array[i].email, field, INPUT_LENGTH - 1);
-        contact_array[i].email[INPUT_LENGTH - 1] = '\0';
-      } else if (x == 3) {
-        strncpy(contact_array[i].number, field, INPUT_LENGTH - 1);
-        contact_array[i].number[INPUT_LENGTH - 1] = '\0';
+    while (*p) {
+      if (quoted) {
+        if (*p == '"') {
+          p++;
+          if (*p != '"') {
+            quoted = 0;
+            break;
+          }
+        } else if (*p == '\r' || *p == '\n') {
+          return 0;
+        }
+      } else if (*p == ',' || *p == '\r' || *p == '\n') {
+        break;
+      } else if (*p == '"') {
+        return 0;
       }
-      x++;
-      field = strtok(NULL, ",");
+      if (length >= INPUT_LENGTH - 1)
+        return 0;
+      fields[field][length++] = *p++;
     }
-
-    i++;
-    if (i >= MAX_CONTACTS)
-      break;
+    if (quoted)
+      return 0;
+    if (field < 3) {
+      if (*p++ != ',')
+        return 0;
+    } else {
+      if (*p == '\r')
+        p++;
+      if (*p == '\n')
+        p++;
+      if (*p != '\0')
+        return 0;
+    }
   }
+  *contact = parsed;
+  return 1;
+}
 
+int read_from_csv(Contact contact_array[]) {
+  FILE *fptr = fopen(FILENAME, "r");
+  char buffer[CSV_LINE_LENGTH];
+  int count = 0;
+  if (fptr == NULL)
+    return 0;
+
+  while (count < MAX_CONTACTS && fgets(buffer, sizeof(buffer), fptr)) {
+    if (strchr(buffer, '\n') == NULL && !feof(fptr)) {
+      int c;
+      while ((c = fgetc(fptr)) != '\n' && c != EOF) {}
+      continue;
+    }
+    if (parse_contact_csv(buffer, &contact_array[count]))
+      count++;
+  }
   fclose(fptr);
-
-  return i;
+  return count;
 }
 
 void print_contact(const Contact *contact) {
